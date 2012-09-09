@@ -124,7 +124,7 @@
 
   // create Dropbox API client
   var client = new Dropbox.Client({
-      key: "cxcu0rglcs0kmy7", secret: "rytggrsypjh4h7t", sandbox: true
+      'key': key, 'secret': secret, 'sandbox': true
   });
   client.authDriver(new Dropbox.Drivers.Redirect());
 
