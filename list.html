@@ -1,0 +1,262 @@
+
+
+
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <title>Indie bookmarks</title>
+
+     <link rel="stylesheet" href="css/styles.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <script src="javascript/dropbox.min.js"></script>
+    <script src="javascript/underscore-min.js"></script>
+    <script src="javascript/DOMParser.js"></script>
+
+    <script src="javascript/microformats-shiv.min.js"></script>
+    <script src="javascript/microformats-coredefinition.min.js"></script>
+    <script src="javascript/microformats-hreviewdefinition.min.js"></script>
+
+    <style type="text/css">
+      .hreview{
+        border-bottom: 1px solid #eee;
+        padding-bottom: 10px;
+        margin-bottom: 30px;
+      }
+      .hreview p, .hreview h3 {
+        margin: 0;
+      }
+
+      h3 a{
+        font: 800 14px/1.5 Lato,"Helvetica Neue",Helvetica,Arial,sans-serif;
+        font-size: 16px;
+      }
+
+      ul{
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      li{
+        display: inline-block;
+        margin-right: 8px;
+      }
+
+      abbr{
+        display: block;
+        border: none;
+      }
+
+    </style>
+
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <div class="wrapper">
+      
+        <h1>Indie bookmarks: <strong>API</strong></h1>
+
+        <p>loading... </p>
+    
+    </div>
+  </body>
+
+
+
+<script id="template" type="text/template">
+<div class="wrapper">
+      <h1>Indie bookmarks: <strong>API</strong></h1>
+    
+      <% for (var i = 0; i < bookmarks.length; i++) { %>
+        <% var bookmark = bookmarks[i]; %>
+        <div class="hreview">
+          <h3 class="summary item"><a class="url" rel="bookmark" href="<%= bookmark.item.url %>"><%= bookmark.title %></a></h3>
+          <p class="description"><%= bookmark.description %></p>
+          <abbr class="dtreviewed" title="<%= bookmark.isodate %>"><%= bookmark.date %></abbr>
+          <ul>
+            <% for (var x = 0; x < bookmarks[i].tag.length; x++) { %>
+            <li><a rel="tag" href="tags/<%= bookmarks[i].tag[x].text %>"><%= bookmarks[i].tag[x].text %></a></li>
+            <% } %>
+          </ul>
+        </div>
+        <% } %>
+</div>
+</script>
+
+
+
+
+
+<script>
+  
+  // add dropbox client
+  var client = new Dropbox.Client({
+      key: "cxcu0rglcs0kmy7", secret: "rytggrsypjh4h7t", sandbox: true
+  });
+  client.authDriver(new Dropbox.Drivers.Redirect());
+
+  // window.localStorage.removeItem("oauth");
+  // checks storage for last token or reauthenticates user
+  var oauth = window.localStorage.getItem("oauth");
+  if(oauth){
+    var obj = JSON.parse(oauth);
+    client.oauth.hmacKey = obj.hmacKey; 
+    client.oauth.key = obj.key;
+    client.oauth.secret = obj.secret;
+    client.oauth.token = obj.token;
+    client.oauth.tokenSecret = obj.tokenSecret;
+    client.authState = 4;
+  }else{
+    client.authenticate(function(error, client) {
+      if (error) {
+        return showError(error);
+      }
+      var obj = {
+        'hmacKey': client.oauth.hmacKey, 
+        'key': client.oauth.key,
+        'secret': client.oauth.secret,
+        'token': client.oauth.token,
+        'tokenSecret': client.oauth.tokenSecret,
+      }
+      window.localStorage.setItem("oauth",JSON.stringify(obj));
+    });
+  }
+
+  var showError = function(error) {
+    if (window.console) {  // Skip the "if" in node.js code.
+      console.error(error);
+    }
+
+    switch (error.status) {
+    case 401:
+      // If you're using dropbox.js, the only cause behind this error is that
+      // the user token expired.
+      // Get the user through the authentication flow again.
+      break;
+
+    case 404:
+      // The file or folder you tried to access is not in the user's Dropbox.
+      // Handling this error is specific to your application.
+      break;
+
+    case 507:
+      // The user is over their Dropbox quota.
+      // Tell them their Dropbox is full. Refreshing the page won't help.
+      break;
+
+    case 503:
+      // Too many API requests. Tell the user to try again later.
+      // Long-term, optimize your code to use fewer API calls.
+      break;
+
+    case 400:  // Bad input parameter
+    case 403:  // Bad OAuth request.
+    case 405:  // Request method not expected
+    default:
+      // Caused by a bug in dropbox.js, in your application, or in Dropbox.
+      // Tell the user an error occurred, ask them to refresh the page.
+    }
+  };
+
+
+
+  function getBookmarks(){
+    
+    client.readFile("index.html", function(error, data) {
+      if (error) {
+        return showError(error);  // Something went wrong.
+      }
+
+      var dp = new DOMParser();
+      var doc = dp.parseFromString(data, 'text/html');
+      var uf = ufShiv.get('hReview', doc.body)
+      var out = [];
+      if(uf.microformats){
+        if(uf.microformats.hreview){
+          out = uf.microformats.hreview;
+        }
+      }
+
+      // Add in date formats for html display
+      var i = out.length;
+      while (i--) {
+        var date = new Date(out[i].dtreviewed)
+        out[i].isodate = out[i].dtreviewed;
+        out[i].date = getTextDate(date);
+        out[i].title = out[i].summary;
+      }
+
+      var templateHTML = template.innerHTML;
+      var html = _.template(templateHTML, { 'bookmarks' : out });
+
+      document.body.innerHTML = html;
+      
+
+    });
+
+  }
+
+
+
+
+  // returns a date in string format 18 August 2012
+  function getTextDate(d){
+    var monthNames = [ "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December" ];
+
+    return d.getUTCDate() + ' ' + monthNames[d.getUTCMonth()] + ' ' + d.getUTCFullYear();
+  }
+
+
+  // returns a date in a simple ISO format
+  function getISODate(d){
+      function pad(n) {
+          return n < 10 ? '0' + n : n
+      }
+      return d.getUTCFullYear() + '-'
+          + pad(d.getUTCMonth() + 1) + '-'
+          + pad(d.getUTCDate()) + 'T'
+          + pad(d.getUTCHours()) + ':'
+          + pad(d.getUTCMinutes()) + ':'
+          + pad(d.getUTCSeconds()) + 'Z'
+  }
+
+
+  // takes a string od tags and creates a array of tags
+  function parseTags(str){
+    var out = [];
+    if(str !== ''){
+      if(str.indexOf(',') > -1){
+        out = str.split(',');
+      }else if(str.indexOf(' ') > -1){
+        out = str.split(' ');
+      }else{
+        out = [str]
+      }
+    }
+    var i = out.length;
+    while (i--) {
+        var tag = trim(out[i]).toLowerCase();
+        out[i] = { 'tag': tag, 'link': 'tags/'+ tag, 'text': tag }
+    }
+    return out;
+  }
+
+
+  // trim a string
+  function trim(str) {
+      return str.replace(/^\s+|\s+$/g, "");
+  }
+
+
+  getBookmarks();
+
+</script>
+
+
+</html>
+
+
